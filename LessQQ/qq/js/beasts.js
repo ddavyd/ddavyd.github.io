@@ -52,7 +52,7 @@ const getResource = async (url) => {
     return await res.json();
 };
 
-getResource('https://sirus.su/api/base/57/leader-board/bossfights/boss-kill/2575096')
+getResource('https://sirus.su/api/base/57/details/bossfight/2586773?lang=ru')
     .then(data => {
         data.data.players.forEach(({ character : {name, class_name}, dps, hps }) => {
             new Player( name, class_name, dps, hps,  ".players .container" ).render();
