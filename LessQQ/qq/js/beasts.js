@@ -62,7 +62,7 @@ getResource('https://sirus.su/api/base/57/details/bossfight/2586773?lang=ru')
 
      fetch('https://sirus.su/api/base/57/details/bossfight/2586773?lang=ru')
      .then(response => response.json())
-     .then(json => console.log(json.data.players))
+     .then(json => console.log(json.data.players{ character}))
 
 
 
