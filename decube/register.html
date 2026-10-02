@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Регистрация</title>
+  <link rel="stylesheet" href="/frontend/styles.css?v=reg_fix_2">
+</head>
+<body>
+  <div class="app-container narrow">
+    <h2>Регистрация</h2>
+
+    <form id="step1">
+      <label>Код регистрации (join code)<br>
+        <input type="text" id="join_code" required>
+      </label><br>
+      <button type="submit">Продолжить</button>
+      <div id="m1" class="error" style="margin-top:10px;"></div>
+    </form>
+
+    <form id="step2" style="display:none;">
+      <div id="tenantInfo" style="margin:8px 0;"></div>
+
+      <label>Табельный номер<br>
+        <input type="text" id="tab_no" required>
+      </label><br>
+
+      <label>Дата рождения (ДД.ММ.ГГГГ или ГГГГ-ММ-ДД)<br>
+        <input type="text" id="birth_date" placeholder="27.08.2007" required>
+      </label><br>
+
+      <label>Email<br>
+        <input type="email" id="email" required>
+      </label><br>
+
+      <label>Пароль (минимум 8)<br>
+        <input type="password" id="pw1" required minlength="8">
+      </label><br>
+
+      <label>Повтор пароля<br>
+        <input type="password" id="pw2" required minlength="8">
+      </label><br>
+      
+      <label style="display:block; margin:10px 0; font-size:14px;">
+  <input type="checkbox" id="pd_consent" required>
+  Я даю согласие на обработку моих персональных данных
+  в соответствии с
+  <a href="/policy_pd.html" target="_blank">
+    Политикой обработки персональных данных
+  </a>
+</label>
+
+      
+      
+      <button type="submit">Создать аккаунт</button>
+
+      <div id="m2" class="error" style="margin-top:10px;"></div>
+
+      <!-- SUCCESS BOX -->
+      <div id="successBox" style="display:none; margin-top:12px; padding:10px 12px; border:1px solid rgba(0,0,0,.15); border-radius:8px;">
+        <div style="font-weight:600; margin-bottom:6px;">Аккаунт создан ✅</div>
+        <div style="margin-bottom:8px;">
+          Ваш логин: <span id="createdUsername" style="font-family:monospace; font-weight:600;"></span>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button type="button" id="copyLoginBtn">Скопировать логин</button>
+          <a href="/" class="btn" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center; padding:8px 12px; border:1px solid rgba(0,0,0,.15); border-radius:6px; background:#fff; cursor:pointer;">
+            Перейти ко входу
+          </a>
+        </div>
+      </div>
+    </form>
+
+    <p style="margin-top:12px; font-size:14px;">
+  <a href="/">← На вход</a><br>
+  <a href="/policy_pd.html" target="_blank">
+    Политика обработки персональных данных
+  </a>
+</p>
+
+  </div>
+
+<script>
+(function(){
+  const step1 = document.getElementById('step1');
+  const step2 = document.getElementById('step2');
+  const m1 = document.getElementById('m1');
+  const m2 = document.getElementById('m2');
+  const tenantInfo = document.getElementById('tenantInfo');
+
+  const successBox = document.getElementById('successBox');
+  const createdUsername = document.getElementById('createdUsername');
+  const copyLoginBtn = document.getElementById('copyLoginBtn');
+
+  function normalizeBirthDate(input) {
+    const s = (input || '').trim();
+    if (!s) return '';
+
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+    // DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
+    const m = s.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{4})$/);
+    if (m) {
+      const dd = String(m[1]).padStart(2, '0');
+      const mm = String(m[2]).padStart(2, '0');
+      const yyyy = m[3];
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    return ''; // неизвестный формат
+  }
+
+  function showError(el, text) {
+    el.className = 'error';
+    el.textContent = text || '';
+  }
+  function showOk(el, text) {
+    el.className = '';
+    el.textContent = text || '';
+  }
+
+  step1.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showError(m1, '');
+    const code = (document.getElementById('join_code').value || '').trim();
+    if(!code){ showError(m1, 'Введите код'); return; }
+
+    try{
+      const r = await fetch('/api/register_prepare.php?join_code=' + encodeURIComponent(code), {method:'GET'});
+      const j = await r.json().catch(()=>null);
+      if(!r.ok || !j || j.ok === false){
+        showError(m1, (j && j.error) ? j.error : ('Ошибка: ' + r.status));
+        return;
+      }
+
+      tenantInfo.textContent = j.tenant_name ? ('Подразделение: ' + j.tenant_name) : '';
+      step1.style.display = 'none';
+      step2.style.display = '';
+      step2.dataset.joinCode = code;
+
+      // reset step2 status
+      showError(m2, '');
+      successBox.style.display = 'none';
+      createdUsername.textContent = '';
+
+    }catch(err){
+      showError(m1, 'Сетевая ошибка');
+    }
+  });
+
+  step2.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showError(m2, '');
+
+    const join_code = step2.dataset.joinCode || '';
+    const birthRaw = (document.getElementById('birth_date').value || '').trim();
+    const birthNorm = normalizeBirthDate(birthRaw);
+
+    if (!birthNorm) {
+      showError(m2, 'Неверный формат даты. Введите ДД.ММ.ГГГГ или ГГГГ-ММ-ДД');
+      return;
+    }
+
+    const payload = {
+      join_code,
+      tab_no: (document.getElementById('tab_no').value || '').trim(),
+      birth_date: birthNorm,
+      email: (document.getElementById('email').value || '').trim(),
+      password: document.getElementById('pw1').value,
+      password2: document.getElementById('pw2').value,
+      pd_consent: document.getElementById('pd_consent').checked
+    };
+
+    try{
+      const r = await fetch('/api/register_finish.php', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const j = await r.json().catch(()=>null);
+
+      if(!r.ok || !j || j.ok === false){
+        let msg = 'Ошибка регистрации';
+
+if (j && j.error) {
+  if (j.error === 'pd_consent_required') {
+    msg = 'Нужно согласиться с обработкой персональных данных';
+  } else if (j.error === 'password_mismatch') {
+    msg = 'Пароли не совпадают';
+  } else if (j.error === 'password_too_short') {
+    msg = 'Пароль слишком короткий';
+  } else {
+    msg = j.error;
+  }
+}
+
+showError(m2, msg);
+        successBox.style.display = 'none';
+        return;
+      }
+
+      // показать логин
+      const uname =
+        (j.user && j.user.username) ? j.user.username :
+        (j.username ? j.username : '');
+
+      if (uname) {
+        createdUsername.textContent = uname;
+        successBox.style.display = '';
+        showOk(m2, '');
+      } else {
+        // на всякий случай, если сервер не прислал
+        showOk(m2, 'Готово. Аккаунт создан. Можно войти.');
+        successBox.style.display = 'none';
+      }
+
+    }catch(err){
+      showError(m2, 'Сетевая ошибка');
+      successBox.style.display = 'none';
+    }
+  });
+
+  copyLoginBtn.addEventListener('click', async () => {
+    const text = (createdUsername.textContent || '').trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      copyLoginBtn.textContent = 'Скопировано';
+      setTimeout(()=> copyLoginBtn.textContent = 'Скопировать логин', 1200);
+    } catch(e) {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      copyLoginBtn.textContent = 'Скопировано';
+      setTimeout(()=> copyLoginBtn.textContent = 'Скопировать логин', 1200);
+    }
+  });
+
+  // если пришли с ?join_code=...
+  const params = new URLSearchParams(location.search);
+  const pre = params.get('join_code');
+  if(pre){
+    document.getElementById('join_code').value = pre;
+  }
+})();
+</script>
+</body>
+</html>
